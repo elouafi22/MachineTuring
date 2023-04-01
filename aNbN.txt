@@ -1,5 +1,5 @@
 programme pour reconnaitre le langage a^nb^n
-accepteur
+reconnaisseur
 q0
 q4
 q0,a,q1,#,R
