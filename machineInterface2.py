@@ -10,8 +10,9 @@ import time
 
 
 class teteLecture(QGraphicsObject):
-    def __init__(self):
+    def __init__(self,positiontete=4):
         super(teteLecture, self).__init__()
+        self.positiontete=positiontete
 
     def boundingRect(self):
         return QRectF(0, 0, 100, 30)
@@ -22,15 +23,15 @@ class teteLecture(QGraphicsObject):
         painter.drawPolygon(
             QPolygonF([QPointF(50, 0), QPointF(0, 30), QPointF(100, 30)]))
 
-    def deplasserTete(self, x, y):
-        "methode permet de deplacer la tete de lecture"
-        self.setPos(x, y)
+    def deplasserTete(self,x, y=0):
+        self.setPos(self.positiontete*x,y)
+        print(self.x())
 
 # cette class definir l'affichage de la table de transition
 
 
 class TableTransition(QTableWidget):
-    def __init__(self, transitions):
+    def __init__(self, transitions,nomProgramme):
         super().__init__()
         nRows, nColumns = len(transitions), 5
         self.setColumnCount(nColumns)
@@ -41,7 +42,17 @@ class TableTransition(QTableWidget):
         self.setHorizontalHeaderLabels(self.titreTabtransition)
         #item.setBackground(QColor(255, 0, 0))
         i = 0
-        for key, val in transitions.items():
+        print(nomProgramme)
+        if nomProgramme=="Tour de hanoi":
+            for key, val in transitions.items():
+             self.setItem(i, 0, QTableWidgetItem(key[0]))
+             self.setItem(i, 1, QTableWidgetItem(key[1]+" , "+key[2]+" , "+key[3]))
+             self.setItem(i, 2, QTableWidgetItem(val[1]+" , "+val[2]+" , "+val[3]))
+             self.setItem(i, 3, QTableWidgetItem(val[4]+" , "+val[5]+" , "+val[6]))
+             self.setItem(i, 4, QTableWidgetItem(val[0]))
+             i += 1
+        else:
+         for key, val in transitions.items():
             self.setItem(i, 0, QTableWidgetItem(key[0]))
             self.setItem(i, 1, QTableWidgetItem(key[1]))
             self.setItem(i, 2, QTableWidgetItem(val[1]))
@@ -71,9 +82,51 @@ class TableTransition(QTableWidget):
 
             self.previous_row = current_row
             self.previous_column = current_column
-          
-          
 
+
+class Ruban:
+    def __init__(self, rect_count, rect_width, rect_height, rect_gap,scene,declage):
+        self.rect_count = rect_count
+        self.rect_width = rect_width
+        self.rect_height = rect_height
+        self.rect_gap = rect_gap
+        self.scene = scene
+        self.cells = []
+        self.decalge = declage
+        self.initialiserRuban()
+
+    def creationObjetQgraphicsText(self, caractere, position):
+        rect = self.scene.addRect(position * (self.rect_width + self.rect_gap), self.decalge, self.rect_width,
+                                  self.rect_height, pen=QPen(QColor("white")), brush=QBrush(QColor("#33B9FF")))
+        text = QGraphicsTextItem(caractere)
+        text.setFont(QFont("Arial", 25))
+        text_rect = text.boundingRect()
+        text.setDefaultTextColor(QColor("white"))
+        text_x = position * (self.rect_width + self.rect_gap) + (self.rect_width - text_rect.width()) / 2
+        text_y = ((self.rect_height - text_rect.height()) / 2) + self.decalge
+        text.setPos(text_x, text_y)
+        self.scene.addItem(text)
+        self.cells.append(text)
+
+    def initialiserRuban(self):
+        self.cells = []
+        for i in range(self.rect_count):
+            self.creationObjetQgraphicsText("#", i)   
+    
+    def ajouterProblemeAuRubban(self,probleme,tetelecture):
+     "Méthode permettant d'insérer le problème dans le ruban"
+     self.tete = tetelecture.positiontete
+     if probleme.strip():
+         for indice in range(len(probleme)):
+            if indice < len(self.cells) - self.tete:
+                self.cells[indice + self.tete].setPlainText(probleme[indice])
+            else:
+                self.creationObjetQgraphicsText(probleme[indice], indice + self.tete)
+         tetelecture.deplasserTete(self.rect_width)
+     else:
+        QMessageBox.information(self, "Information", "Entrez une valeur valide.")
+        
+        
 
 class machineInterface(QMainWindow):
     def __init__(self):
@@ -132,16 +185,15 @@ class machineInterface(QMainWindow):
         self.rect_gap = 5
         self.rect_count = 8
         self.cells = []
-        self.ruban = "#"*16
-            
-
+        self.decalge1 = -70
+        
         # création du ruban et initialisation
-        self.initialiserRuban()
-            
+        self.ruban1=Ruban(self.rect_count,self.rect_width,self.rect_height,self.rect_gap,self.scene,self.decalge1)
+ 
         # creation de la tete de lecture
-        
-        self.creationTetelecture()
-        
+        self.triangle=self.creationTetelecture()
+        self.tete=self.triangle.positiontete
+     
         self.transitions = {}
 
         # creation des widgets pour niveau 4
@@ -205,41 +257,20 @@ class machineInterface(QMainWindow):
         self.box0.addLayout(self.niveau5)
 
         # ajouter les evenement pour les button
-        self.buttonCommencer.clicked.connect(self.execution)
+        self.buttonCommencer.clicked.connect(self.executionProgramme)
         self.buttonChoisirProgramme.clicked.connect(self.chargerProgramme)
         self.buttonValider.clicked.connect(self.ajouterProblemeAuRubban)
         self.buttonRecommancer.clicked.connect(self.rocommencer)
         
-#methode permet de cree la tete de lecture 
-    def creationTetelecture(self):
-        self.triangle = teteLecture()
-        self.triangle.setPos(-20, 0)
-        self.scene.addItem(self.triangle)
-        self.vue.ensureVisible(self.triangle, 50, 50)
- 
-# creation d'un objet de type QGraphicsTextItem
-    def creationObjetQgraphicsText(self,caractere,position):
-        "cette methode permet de creer un objet de type QGraphicsTextItem et de le positionner"
-        rect = self.scene.addRect(position * (self.rect_width + self.rect_gap), self.decalge, self.rect_width,
-                                      self.rect_height, pen=QPen(QColor("white")), brush=QBrush(QColor("#33B9FF")))
-        text = QGraphicsTextItem(caractere)
-        text.setFont(QFont("Arial", 25))
-        text_rect = text.boundingRect()
-        text.setDefaultTextColor(QColor("white"))
-        text_x = position * (self.rect_width + self.rect_gap) + \
-                (self.rect_width - text_rect.width()) / 2
-        text_y = ((self.rect_height - text_rect.height()) / 2)+self.decalge
-        text.setPos(text_x, text_y)
-        self.scene.addItem(text)
-        self.cells.append(text)
-
-#methode permet d'initialiser le ruban 
-    def initialiserRuban(self):
-        self.cells = []
-        self.decalge = -70
-        for i in range(self.rect_count):
-            self.creationObjetQgraphicsText("#",i)
-
+# methode permet de cree la tete de lecture 
+    def creationTetelecture(self,postionx=-20,positiony=0):
+        nomTeteLecture = teteLecture(1)
+        nomTeteLecture.setPos(postionx,positiony)
+        self.scene.addItem(nomTeteLecture)
+        self.vue.ensureVisible(nomTeteLecture, 50, 50)
+        return nomTeteLecture
+        
+        
 # mathode permet d'ajouter la table de transition
 
     def chargerProgramme(self):
@@ -257,7 +288,8 @@ class machineInterface(QMainWindow):
 
         # cree une instance de la class tableTransition
         self.transitions = self.automate.getTransitions()
-        self.tableTransition = TableTransition(self.transitions)
+        self.nomProgramme=self.automate.getInformations()[0]
+        self.tableTransition = TableTransition(self.transitions,self.nomProgramme)
 
         self.label_programme.setText(self.automate.getInformations()[0])
         self.etaIital = self.automate.getInformations()[1]
@@ -272,23 +304,17 @@ class machineInterface(QMainWindow):
         self.niveau6.addSpacing(10)
         self.niveau6.addWidget(self.tableTransition)
         self.niveau6.addSpacing(10)
+        
+        if self.nomProgramme=="Tour de hanoi":
+            self.initialisationPourTourHanoi()
 
 # methode permet d'ajouter une instance du prbleme au ruban
 
     def ajouterProblemeAuRubban(self):
      "Méthode permettant d'insérer le problème dans le ruban"
-     self.tete = 4
      self.probleme = self.lineEditProbleme.text()
-     if self.probleme.strip():
-         for indice in range(len(self.probleme)):
-            if indice < len(self.cells) - self.tete:
-                self.cells[indice + self.tete].setPlainText(self.probleme[indice])
-            else:
-                self.creationObjetQgraphicsText(self.probleme[indice], indice + self.tete)
-         self.triangle.setPos(self.tete * 60, 0)
-         print(self.triangle.x())
-     else:
-        QMessageBox.information(self, "Information", "Entrez une valeur valide.")
+     self.ruban1.ajouterProblemeAuRubban(self.probleme,self.triangle)
+     
         
 
 # methode permet de recommencer l'execution 
@@ -300,8 +326,8 @@ class machineInterface(QMainWindow):
             self.scene.removeItem(item)
             
         self.creationTetelecture()
-        self.initialiserRuban()
-        self.ajouterProblemeAuRubban()
+        self.ruban1.initialiserRuban()
+        self.ruban1.ajouterProblemeAuRubban(self.probleme,self.triangle)
         print(self.probleme)
         print(self.tete)
         
@@ -312,47 +338,62 @@ class machineInterface(QMainWindow):
 
 
 # methode permet de deplacer la tete le delecture
-
-    def deplacementRuban(self, R):
+    
+    def animationTete(self,triangle,sens):
         vitesse = 1000  # controler la vitesse d'animation
-        print(self.triangle.pos().x())
+        print(triangle.pos().x())
         self.animation = QPropertyAnimation(
-            self.triangle, b'pos')  # remplacer l'objet d'animation
-        self.triangle.update()
+            triangle, b'pos')  # remplacer l'objet d'animation
+        triangle.update()
         self.animation.setDuration(vitesse)
         self.animation.setStartValue(
-            QPointF(self.triangle.pos().x(), self.triangle.pos().y()))
-        if R == "R":
+            QPointF(triangle.pos().x(),triangle.pos().y()))
+        if sens == "R":
             self.animation.setEndValue(
-                QPointF(self.triangle.pos().x()+65, self.triangle.pos().y()))
+                QPointF(triangle.pos().x()+65,triangle.pos().y()))
         else:
             self.animation.setEndValue(
-                QPointF(self.triangle.pos().x()-65, self.triangle.pos().y()))
-
-        # self.animation.setLoopCount(-1)
-        self.triangle.update()
-        self.animation.finished.connect(self.execution)
+                QPointF(triangle.pos().x()-65,triangle.pos().y()))
         self.animation.start()
-        position = QPointF(self.triangle.pos().x(), 0)
-        self.vue.centerOn(QPointF(self.triangle.pos().x(), 0))
+
+    def deplacementTeteLecture(self,triangle,sens):
+        
+        if sens == "R":
+            self.animationTete(triangle,sens)
+        else:
+            self.animationTete(triangle,sens)
+        # self.animation.setLoopCount(-1)
+        triangle.update()
+        self.animation.finished.connect(self.execution)
+        #position = QPointF(triangle.pos().x(), 0)
+        #self.vue.centerOn(QPointF(triangle.pos().x(), 0))
 
 # methode permet d'executer les instructions de la table de transition
+    
+    def executionProgramme(self):
+        print(self.nomProgramme)
+        if self.nomProgramme=="Tour de hanoi":
+            self.executionTourhanoi()
+        else:
+            self.execution()
+
+
     def execution(self):
-        val = 1  # controler la vitesse d'execution
-        "execution des instruction da la table de transition sur la la machine"
+        self.val = 1  # controler la vitesse d'execution  
+        self.cells=self.ruban1.cells
         if self.etatCourant not in self.etatFinals:
             
             if self.tete>=len(self.cells):
-                  self.creationObjetQgraphicsText('#',self.tete) #creation d'une nouvelle case si on a arriver a la fin du ruban
+                  self.creationCellule(self.ruban1) #creation d'une nouvelle case si on a arriver a la fin du ruban
+            
                   
             cle =(self.etatCourant, self.cells[self.tete].toPlainText())
             self.transition = self.transitions.get(cle, None)
             self.getposition(cle,'Etat')
-        
-            #['Etat', 'Lit', 'Ecrit', 'Déplacement', 'Nouvel Etat']
+    
             self.getposition(cle,'Lit')
             if self.transition:
-                self.deplacementRuban(self.transition[2]) #! deplacement la tete de lecture
+                self.deplacementTeteLecture(self.triangle,self.transition[2]) #! deplacement la tete de lecture
                 
                 self.getposition(cle,'Ecrit')
                 self.cells[self.tete].setPlainText(self.transition[1])
@@ -368,7 +409,6 @@ class machineInterface(QMainWindow):
                 self.etatCourant = self.transition[0]
                 self.label_etat.setText("Etat : "+self.transition[0])
                 self.getposition(cle,'Nouvel Etat')
-                time.sleep(val)
             else:
                 if (self.mode == "reconnaisseur"):
                     self.label_reponce.setText("n'est pas reconnu")
@@ -377,8 +417,127 @@ class machineInterface(QMainWindow):
         if self.etatCourant in self.etatFinals and self.mode == "reconnaisseur":
             self.label_reponce.setText("reconnu")
             self.label_reponce.setStyleSheet("color: green;")
+    
         
-# autre methode pour l'aide
+    
+    def initialisationPourTourHanoi(self):
+        "initialisation du la vue avec les 3 rubans"
+        
+        self.decalge2 = self.rect_height + self.rect_gap
+        self.decalge3 = self.decalge2*3
+        
+        # création du ruban et initialisation
+        self.ruban2=Ruban(self.rect_count,self.rect_width,self.rect_height,self.rect_gap,self.scene,self.decalge2)
+        self.ruban3=Ruban(self.rect_count,self.rect_width,self.rect_height,self.rect_gap,self.scene,self.decalge3)
+ 
+        # creation de la tete de lecture
+        self.triangle2=self.creationTetelecture(-20,self.rect_height+self.decalge2+10)
+        self.triangle2.deplasserTete(self.rect_width,self.rect_height+self.decalge2+10)
+        self.triangle3=self.creationTetelecture(-20,self.rect_height+self.decalge3+10)
+        self.triangle3.deplasserTete(self.rect_width,self.rect_height+self.decalge3+10)
+        
+        # recuperation de la position de la tete de lecture 
+        self.tete2=self.triangle2.positiontete
+        self.tete3=self.triangle3.positiontete
+    
+    def deplacementTeteLectures(self,sens1,sens2,sens3):
+        if sens1 == "R":
+          self.animationTete(self.triangle,sens1)
+        elif sens1 == "L":
+            self.animationTete(self.triangle,sens1)
+        
+        if sens2 == "R":
+          self.animationTete(self.triangle2,sens2)
+        elif sens2 == "L":
+           self.animationTete(self.triangle2,sens2)
+        
+        if sens3 == "R":
+          self.animationTete(self.triangle3,sens3)
+        elif sens3 == "L":
+           self.animationTete(self.triangle3,sens3)
+            
+        #triangle.update()
+        self.animation.finished.connect(self.executionTourhanoi)
+        
+        
+    def executionTourhanoi(self):
+        self.val = 1  # controler la vitesse d'execution
+        
+        self.cells=self.ruban1.cells
+        self.cells2=self.ruban2.cells
+        self.cells3=self.ruban3.cells
+        
+        if self.etatCourant not in self.etatFinals:
+            
+            if self.tete>=len(self.cells):
+                 self.creationCellule(self.ruban1)
+                 
+            if self.tete2>=len(self.cells):
+                 self.creationCellule(self.ruban1)
+            
+            if self.tete3>=len(self.cells):
+                 self.creationCellule(self.ruban1)
+                 
+            cle =(self.etatCourant, self.cells[self.tete].toPlainText(),self.cells2[self.tete2].toPlainText(),self.cells3[self.tete3].toPlainText())
+            print(cle)
+            self.transition = self.transitions.get(cle, None)
+            #self.getposition(cle,'Etat')
+    
+            #self.getposition(cle,'Lit')
+            if self.transition:
+                
+                self.deplacementTeteLectures(self.transition[4],self.transition[5],self.transition[6]) #! deplacement la tete de lecture
+                #self.getposition(cle,'Ecrit')
+                self.cells[self.tete].setPlainText(self.transition[1])
+                self.cells2[self.tete2].setPlainText(self.transition[2])
+                self.cells3[self.tete3].setPlainText(self.transition[3])
+                print(self.cells[self.tete],self.cells2[self.tete2],self.cells3[self.tete3])
+
+                # deplacement des rubants
+                if(self.transition[4] == 'R'):
+                    self.tete += 1
+                    #self.getposition(cle,'Déplacement')
+                elif(self.transition[4] == 'L'):
+                    self.tete -= 1
+                    #self.getposition(cle,'Déplacement')
+                    
+                if(self.transition[5] == 'R'):
+                    self.tete2 += 1
+                    #self.getposition(cle,'Déplacement')
+                    
+                elif(self.transition[5] == 'L'):
+                    self.tete2 -= 1
+                    #self.getposition(cle,'Déplacement')
+                    
+                if(self.transition[6] == 'R'):
+                    self.tete3 += 1
+                    #self.getposition(cle,'Déplacement')
+                
+                elif(self.transition[6] == 'L'):
+                    self.tete3 -= 1
+                    #self.getposition(cle,'Déplacement')
+    
+                self.etatCourant = self.transition[0]
+                self.label_etat.setText("Etat : "+self.transition[0])
+                print(self.tete,self.tete2,self.tete3)
+                #self.getposition(cle,'Nouvel Etat')
+                
+            else:
+                if (self.mode == "reconnaisseur"):
+                    self.label_reponce.setText("n'est pas reconnu")
+                    self.label_reponce.setStyleSheet("color: red;")
+                # break
+        if self.etatCourant in self.etatFinals and self.mode == "reconnaisseur":
+            self.label_reponce.setText("reconnu")
+            self.label_reponce.setStyleSheet("color: green;")
+        time.sleep(1)
+            
+            
+    def creationCellule(self,nom):
+        nom.creationObjetQgraphicsText('#',self.tete) #creation d'une nouvelle case si on a arriver a la fin du ruban
+    
+    
+    # autre methode pour l'aide
     def getposition(self,cle,valeur):
         "methode permet de returner la position de la case en cour de traiter"
         line=list(self.transitions.keys()).index(cle)
@@ -389,88 +548,23 @@ class machineInterface(QMainWindow):
         if valeur==2:
          self.label_message.setText(
                 "Symbole lit : "+self.cells[self.tete].toPlainText())
-        elif valeur==3:
+        elif valeur==self.tableTransition.titreTabtransition[3]:
             self.label_message.setText("Symbole ecrit : "+self.transition[1])
-        elif valeur==4 and self.transition[2] == 'R':
+        elif valeur==self.tableTransition.titreTabtransition[4] and self.transition[2] == 'R':
             self.label_message.setText(
                       "Mouvement de rubant : vers la droite")
-        elif valeur==4 and self.transition[2] == 'L':
+        elif self.tableTransition.titreTabtransition[4] and self.transition[2] == 'L':
             self.label_message.setText(
                       "Mouvement de rubant : vers la gauche")
         else:
             self.label_message.setText("Etat : "+self.transition[0])
+        time.sleep(self.val//4)
+        
+        
+        
+        
 
 app = QApplication(sys.argv)
 machine = machineInterface()
 machine.show()
 app.exec_()
-
-
-"""
-
-        QGraphicsPolygonItem()
-        self.triangle.setPolygon(
-            QPolygonF([QPointF(30, 30), QPointF(10, 60), QPointF(50, 60)]))
-        self.triangle.setPos(455,40)
-        self.triangle.setBrush(QBrush(QColor(255, 0, 0)))
-        self.triangle.setPen(QPen(Qt.NoPen))
-
-        ------------------------------------------------------
-
-        def deplacementRuban(self):
-        start_pos = self.triangle.pos()
-        print(f"Start position: {start_pos}")
-
-        end_pos = QtCore.QPointF(start_pos.x() + 100, start_pos.y())
-        print(f"End position: {end_pos}")
-
-        animation = QtCore.QPropertyAnimation(self.triangle, b"pos")
-        animation.setDuration(1500)
-        animation.setStartValue(start_pos)
-        animation.setEndValue(end_pos)
-        animation.start()
-----------------------------------------------------------------------------
-
-def creationObjetQgraphicsText(self,caractere,position,decalge):
-        "cette methode permet de creer un objet de type QGraphicsTextItem et de le positionner"
-        rect = self.scene.addRect(position * (self.rect_width + self.rect_gap), decalge, self.rect_width,
-                                      self.rect_height, pen=QPen(QColor("white")), brush=QBrush(QColor("#33B9FF")))
-        text = QGraphicsTextItem(caractere)
-        text.setFont(QFont("Arial", 25))
-        text_rect = text.boundingRect()
-        text.setDefaultTextColor(QColor("white"))
-        text_x = position * (self.rect_width + self.rect_gap) + \
-                (self.rect_width - text_rect.width()) / 2
-        text_y = ((self.rect_height - text_rect.height()) / 2)+decalge
-        text.setPos(text_x, text_y)
-        self.scene.addItem(text)
-        self.cells.append(text)
-
-        ----------------------------------------------
-
-
-   # créer une animation qui déplace les cellules de droite à gauche
-   for i in range(self.rect_count):
-        animation = QPropertyAnimation(self.cells[i], b"pos")
- # durée de l'animation en millisecondes
-        animation.setDuration(1000)
-        start_pos = QPoint(i * (self.rect_width + self.rect_gap), 0)
-        end_pos = QPoint((i - 1) * (self.rect_width + self.rect_gap), 0)
-        animation.setStartValue(start_pos)
-
-        animation.setEndValue(end_pos)
-        animation.start()
-
-        ----------------------------------------
-
-           for item in self.cells:
-            if self.j < (len(self.ruban)):
-                item.setPlainText(self.ruban[self.j])
-                self.j += 1
-
-    self.j = 1
-    self.j += self.cmt
-    print("apeler la ", self.j)
-    self.cmt += 1
-
-"""
