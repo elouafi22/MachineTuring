@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import sys
-from machineModule import *
+#from machineModule import *
 from PyQt5 import QtCore
 import time
 
@@ -19,8 +19,7 @@ class teteLecture(QGraphicsObject):
     def paint(self, painter, option, widget=None):
         painter.setBrush(Qt.red)
         # Déplacez le triangle au centre de la boîte englobante
-        painter.drawPolygon(
-            QPolygonF([QPointF(50, 0), QPointF(0, 30), QPointF(100, 30)]))
+        painter.drawPolygon(QPolygonF([QPointF(50, 0), QPointF(0, 30), QPointF(100, 30)]))
 
     def deplasserTete(self, x, y):
         "methode permet de deplacer la tete de lecture"
@@ -37,15 +36,26 @@ class TableTransition(QTableWidget):
         self.setRowCount(nRows)
         header = self.horizontalHeader()
         header.setStyleSheet("background-color: gray;")
-        self.titreTabtransition=['Etat', 'Lit', 'Ecrit', 'Déplacement', 'Nouvel Etat']
+        self.titreTabtransition=['Etat', 'Lecture', 'Ecriture', 'Déplacement', 'Nouvel état']
         self.setHorizontalHeaderLabels(self.titreTabtransition)
         #item.setBackground(QColor(255, 0, 0))
         i = 0
         for key, val in transitions.items():
             self.setItem(i, 0, QTableWidgetItem(key[0]))
-            self.setItem(i, 1, QTableWidgetItem(key[1]))
-            self.setItem(i, 2, QTableWidgetItem(val[1]))
-            self.setItem(i, 3, QTableWidgetItem(val[2]))
+            self.setItem(i, 1, QTableWidgetItem(str(key[1])))
+            '''
+            lecture = key[1]
+            if len(lecture) > 1:
+                chaineLecture = '('
+                for i in lecture:
+                    chaineLecture += i
+                chaineLecture += ')'
+                self.setItem(i, 1, QTableWidgetItem((chaineLecture))
+            else:
+                self.setItem(i, 1, QTableWidgetItem(lecture))
+            '''
+            self.setItem(i, 2, QTableWidgetItem(str(val[1])))
+            self.setItem(i, 3, QTableWidgetItem(str(val[2])))
             self.setItem(i, 4, QTableWidgetItem(val[0]))
             i += 1
 
@@ -73,6 +83,53 @@ class TableTransition(QTableWidget):
             self.previous_column = current_column
           
           
+class Automate:
+    "transformation du transitionsramme ecrit dans un fichier sur un dictionnaire"
+
+    def __init__(self, fichier):
+        with open(fichier) as fichierAutomate:
+            self.titre = fichierAutomate.readline().strip()
+            self.mode = fichierAutomate.readline().strip()
+            self.etatInitial = fichierAutomate.readline().strip()
+            self.etatFinals = fichierAutomate.readline().strip().split(',')
+            self.transitions = {}
+            if fichier == "D:/PFE/CooperativeVersion/MachineTuring/hanoi.txt":
+                for line in fichierAutomate:
+                    colonnes = line.strip().split(',')
+                    etatCourant = colonnes[0]
+                    lecture = (colonnes[1],colonnes[2],colonnes[3])
+                    etatSuivant = colonnes[4]
+                    ecriture = (colonnes[5],colonnes[6],colonnes[7])
+                    deplacement = colonnes[8:]
+                    key = (etatCourant,lecture)
+                    value = (etatSuivant,ecriture, deplacement)
+                    self.transitions[key]=value
+                #print(self.transitions)
+            else:
+                for line in fichierAutomate:
+                    colonnes = line.strip().split(',')
+                    key = (colonnes[0],colonnes[1])
+                    value = (colonnes[2],colonnes[3], colonnes[4])
+                    self.transitions[key]=value
+            '''
+            print(self.titre)
+            print(self.mode)
+            print(self.etatInitial)
+            print(self.etatFinals)
+            print(self.transitions)
+            '''
+            
+
+            
+            
+
+    def getTransitions(self):
+        "cette methode return la table de trasition sous la forme d'un dictionaire"
+        return self.transitions
+
+    def getInformations(self):
+        "cette methode return le nom du transitionsramme a faire plus l'etat initiale et l'etat finale et le mode d'utilisation de la machine(reconnaisseur/calculateur) sou la forme d'une liste "
+        return [self.titre, self.etatInitial, self.etatFinals, self.mode]
 
 
 class machineInterface(QMainWindow):
@@ -208,7 +265,7 @@ class machineInterface(QMainWindow):
         self.buttonCommencer.clicked.connect(self.execution)
         self.buttonChoisirProgramme.clicked.connect(self.chargerProgramme)
         self.buttonValider.clicked.connect(self.ajouterProblemeAuRubban)
-        self.buttonRecommancer.clicked.connect(self.rocommencer)
+        self.buttonRecommancer.clicked.connect(self.recommencer)
         
 #methode permet de cree la tete de lecture 
     def creationTetelecture(self):
@@ -252,6 +309,10 @@ class machineInterface(QMainWindow):
             var = "le fichier n'exite pas"
         QMessageBox.information(
             self, "inforation", var)
+        '''
+        if self.fichier == "D:/PFE/CooperativeVersion/MachineTuring/hanoi.txt":
+            print('hanoi')
+        '''
         # cree une intance de la class automate
         self.automate = Automate(self.fichier)
 
@@ -293,7 +354,7 @@ class machineInterface(QMainWindow):
 
 # methode permet de recommencer l'execution 
     
-    def rocommencer(self):
+    def recommencer(self):
         self.etatCourant=self.etaIital
         
         for item in self.scene.items():
@@ -385,7 +446,7 @@ class machineInterface(QMainWindow):
         colone=self.tableTransition.titreTabtransition.index(valeur)
         self.tableTransition.setCurrentCell(line,colone)
         
-        #['Etat', 'Lit', 'Ecrit', 'Déplacement', 'Nouvel Etat']
+        #['Etat', 'Lecture', 'Ecriture', 'Déplacement', 'Nouvel état']
         if valeur==2:
          self.label_message.setText(
                 "Symbole lit : "+self.cells[self.tete].toPlainText())
