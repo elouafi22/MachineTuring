@@ -8,6 +8,31 @@ import time
 
 # cette class definie la tete de lecture
 
+class AnimationTask(QObject, QRunnable):
+    finished = pyqtSignal()  # Signal de fin d'animation
+
+    def __init__(self, triangle, sens):
+        super().__init__()
+        self.triangle = triangle
+        self.sens = sens
+
+    def run(self):
+        vitesse = 1000  # Contrôle la vitesse de l'animation
+
+        self.animation = QPropertyAnimation(self.triangle, b'pos')
+        self.animation.setDuration(vitesse)
+        self.animation.setStartValue(QPointF(self.triangle.pos().x(), self.triangle.pos().y()))
+        if self.sens == "R":
+            self.animation.setEndValue(QPointF(self.triangle.pos().x() + 65, self.triangle.pos().y()))
+        elif self.sens=="L":
+            self.animation.setEndValue(QPointF(self.triangle.pos().x() - 65, self.triangle.pos().y()))
+        else:
+            self.animation.setEndValue(QPointF(self.triangle.pos().x(), self.triangle.pos().y()))
+        self.animation.start()
+        self.animation.finished.connect(self.finished)  # Émet le signal de fin d'animation
+
+
+
 
 class teteLecture(QGraphicsObject):
     def __init__(self,positiontete=4):
@@ -24,7 +49,7 @@ class teteLecture(QGraphicsObject):
             QPolygonF([QPointF(50, 0), QPointF(0, 30), QPointF(100, 30)]))
 
     def deplasserTete(self,x, y=0):
-        self.setPos(self.positiontete*x,y)
+        self.setPos(self.positiontete*x-10,y)
         print(self.x())
 
 # cette class definir l'affichage de la table de transition
@@ -42,7 +67,6 @@ class TableTransition(QTableWidget):
         self.setHorizontalHeaderLabels(self.titreTabtransition)
         #item.setBackground(QColor(255, 0, 0))
         i = 0
-        print(nomProgramme)
         if nomProgramme=="Tour de hanoi":
             for key, val in transitions.items():
              self.setItem(i, 0, QTableWidgetItem(key[0]))
@@ -128,9 +152,10 @@ class Ruban:
         
         
 
-class machineInterface(QMainWindow):
+class machineInterface(QMainWindow,QRunnable):
     def __init__(self):
         super().__init__()
+        self.threadpool = QThreadPool()
         self.setWindowTitle("Machine de Turing")
         # self.setFixedSize(1080, 720)
         self.resize(1080, 720)
@@ -328,50 +353,31 @@ class machineInterface(QMainWindow):
         self.creationTetelecture()
         self.ruban1.initialiserRuban()
         self.ruban1.ajouterProblemeAuRubban(self.probleme,self.triangle)
-        print(self.probleme)
-        print(self.tete)
+        #print(self.probleme)
+        #print(self.tete)
         
 #methode permet de pauser l'execution du programme 
     
     def pause(self):
         pass
 
-
-# methode permet de deplacer la tete le delecture
+    def deplacementTeteLecture(self,triangle,sens):    
+         self.animationTete(triangle,sens)
+         
     
-    def animationTete(self,triangle,sens):
-        vitesse = 1000  # controler la vitesse d'animation
-        print(triangle.pos().x())
-        self.animation = QPropertyAnimation(
-            triangle, b'pos')  # remplacer l'objet d'animation
-        triangle.update()
-        self.animation.setDuration(vitesse)
-        self.animation.setStartValue(
-            QPointF(triangle.pos().x(),triangle.pos().y()))
-        if sens == "R":
-            self.animation.setEndValue(
-                QPointF(triangle.pos().x()+65,triangle.pos().y()))
-        else:
-            self.animation.setEndValue(
-                QPointF(triangle.pos().x()-65,triangle.pos().y()))
-        self.animation.start()
-
-    def deplacementTeteLecture(self,triangle,sens):
-        
-        if sens == "R":
-            self.animationTete(triangle,sens)
-        else:
-            self.animationTete(triangle,sens)
-        # self.animation.setLoopCount(-1)
-        triangle.update()
-        self.animation.finished.connect(self.execution)
-        #position = QPointF(triangle.pos().x(), 0)
-        #self.vue.centerOn(QPointF(triangle.pos().x(), 0))
+    def animationTete(self, triangle, sens):
+       task = AnimationTask(triangle, sens)
+       task.run()
+       if self.nomProgramme=="Tour de hanoi":
+        task.finished.connect(self.executionTourhanoi)  # Connecte le signal de fin d'animation à la méthode d'exécution
+       else:
+        task.finished.connect(self.execution) 
+       self.threadpool.start(task)  # Démarre la tâche d'animation dans le pool de threads
 
 # methode permet d'executer les instructions de la table de transition
     
     def executionProgramme(self):
-        print(self.nomProgramme)
+        #print(self.nomProgramme)
         if self.nomProgramme=="Tour de hanoi":
             self.executionTourhanoi()
         else:
@@ -389,15 +395,12 @@ class machineInterface(QMainWindow):
                   
             cle =(self.etatCourant, self.cells[self.tete].toPlainText())
             self.transition = self.transitions.get(cle, None)
-            self.getposition(cle,'Etat')
-    
-            self.getposition(cle,'Lit')
-            if self.transition:
-                self.deplacementTeteLecture(self.triangle,self.transition[2]) #! deplacement la tete de lecture
-                
-                self.getposition(cle,'Ecrit')
-                self.cells[self.tete].setPlainText(self.transition[1])
 
+            if self.transition:
+                self.getposition(cle,'Etat')
+                self.getposition(cle,'Lit')
+                self.cells[self.tete].setPlainText(self.transition[1])
+                self.getposition(cle,'Ecrit')
                 if(self.transition[2] == 'R'):
                     self.tete += 1
                     self.getposition(cle,'Déplacement')
@@ -405,10 +408,13 @@ class machineInterface(QMainWindow):
                 elif(self.transition[2] == 'L'):
                     self.tete -= 1
                     self.getposition(cle,'Déplacement')
-                    
+                  
+                self.deplacementTeteLecture(self.triangle,self.transition[2]) #! deplacement la tete de lecture  
+                
                 self.etatCourant = self.transition[0]
                 self.label_etat.setText("Etat : "+self.transition[0])
                 self.getposition(cle,'Nouvel Etat')
+   
             else:
                 if (self.mode == "reconnaisseur"):
                     self.label_reponce.setText("n'est pas reconnu")
@@ -417,6 +423,7 @@ class machineInterface(QMainWindow):
         if self.etatCourant in self.etatFinals and self.mode == "reconnaisseur":
             self.label_reponce.setText("reconnu")
             self.label_reponce.setStyleSheet("color: green;")
+        
     
         
     
@@ -439,36 +446,40 @@ class machineInterface(QMainWindow):
         # recuperation de la position de la tete de lecture 
         self.tete2=self.triangle2.positiontete
         self.tete3=self.triangle3.positiontete
-    
+        
+
     def deplacementTeteLectures(self,sens1,sens2,sens3):
         if sens1 == "R":
           self.animationTete(self.triangle,sens1)
         elif sens1 == "L":
             self.animationTete(self.triangle,sens1)
+        elif sens1=="S":
+            self.animationTete(self.triangle3,sens1)
         
         if sens2 == "R":
           self.animationTete(self.triangle2,sens2)
         elif sens2 == "L":
            self.animationTete(self.triangle2,sens2)
+        elif sens2=="S":
+            self.animationTete(self.triangle3,sens2)
         
         if sens3 == "R":
           self.animationTete(self.triangle3,sens3)
         elif sens3 == "L":
            self.animationTete(self.triangle3,sens3)
-            
-        #triangle.update()
-        self.animation.finished.connect(self.executionTourhanoi)
-        
+        elif sens3=="S":
+            self.animationTete(self.triangle3,sens3)         
+       
+    
         
     def executionTourhanoi(self):
         self.val = 1  # controler la vitesse d'execution
-        
         self.cells=self.ruban1.cells
         self.cells2=self.ruban2.cells
         self.cells3=self.ruban3.cells
-        
+        print(self.etatCourant)
         if self.etatCourant not in self.etatFinals:
-            
+            print(self.etatCourant)
             if self.tete>=len(self.cells):
                  self.creationCellule(self.ruban1)
                  
@@ -479,19 +490,19 @@ class machineInterface(QMainWindow):
                  self.creationCellule(self.ruban1)
                  
             cle =(self.etatCourant, self.cells[self.tete].toPlainText(),self.cells2[self.tete2].toPlainText(),self.cells3[self.tete3].toPlainText())
-            print(cle)
+            #print(cle)
             self.transition = self.transitions.get(cle, None)
             #self.getposition(cle,'Etat')
     
             #self.getposition(cle,'Lit')
             if self.transition:
                 
-                self.deplacementTeteLectures(self.transition[4],self.transition[5],self.transition[6]) #! deplacement la tete de lecture
                 #self.getposition(cle,'Ecrit')
                 self.cells[self.tete].setPlainText(self.transition[1])
                 self.cells2[self.tete2].setPlainText(self.transition[2])
                 self.cells3[self.tete3].setPlainText(self.transition[3])
-                print(self.cells[self.tete],self.cells2[self.tete2],self.cells3[self.tete3])
+                print(self.cells[self.tete].toPlainText(),self.cells2[self.tete2].toPlainText(),self.cells3[self.tete3].toPlainText())
+                self.deplacementTeteLectures(self.transition[4],self.transition[5],self.transition[6]) #! deplacement la tete de lecture
 
                 # deplacement des rubants
                 if(self.transition[4] == 'R'):
@@ -517,15 +528,18 @@ class machineInterface(QMainWindow):
                     self.tete3 -= 1
                     #self.getposition(cle,'Déplacement')
     
+               
                 self.etatCourant = self.transition[0]
                 self.label_etat.setText("Etat : "+self.transition[0])
                 print(self.tete,self.tete2,self.tete3)
                 #self.getposition(cle,'Nouvel Etat')
                 
+                
             else:
                 if (self.mode == "reconnaisseur"):
                     self.label_reponce.setText("n'est pas reconnu")
                     self.label_reponce.setStyleSheet("color: red;")
+                print("aucune transition existe")
                 # break
         if self.etatCourant in self.etatFinals and self.mode == "reconnaisseur":
             self.label_reponce.setText("reconnu")
@@ -540,29 +554,31 @@ class machineInterface(QMainWindow):
     # autre methode pour l'aide
     def getposition(self,cle,valeur):
         "methode permet de returner la position de la case en cour de traiter"
+        
         line=list(self.transitions.keys()).index(cle)
         colone=self.tableTransition.titreTabtransition.index(valeur)
         self.tableTransition.setCurrentCell(line,colone)
         
         #['Etat', 'Lit', 'Ecrit', 'Déplacement', 'Nouvel Etat']
-        if valeur==2:
+        if valeur==self.tableTransition.titreTabtransition[2]:
          self.label_message.setText(
                 "Symbole lit : "+self.cells[self.tete].toPlainText())
+        
+         
         elif valeur==self.tableTransition.titreTabtransition[3]:
             self.label_message.setText("Symbole ecrit : "+self.transition[1])
+           
         elif valeur==self.tableTransition.titreTabtransition[4] and self.transition[2] == 'R':
             self.label_message.setText(
                       "Mouvement de rubant : vers la droite")
         elif self.tableTransition.titreTabtransition[4] and self.transition[2] == 'L':
             self.label_message.setText(
                       "Mouvement de rubant : vers la gauche")
+            
         else:
             self.label_message.setText("Etat : "+self.transition[0])
-        time.sleep(self.val//4)
         
-        
-        
-        
+
 
 app = QApplication(sys.argv)
 machine = machineInterface()
